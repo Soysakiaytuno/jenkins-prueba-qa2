@@ -1,63 +1,67 @@
 pipeline {
     agent any
 
-    tools {
-        maven 'Maven'
-        jdk 'Java'
+    environment {
+        // Carpeta absoluta para resultados y reportes
+        ALLURE_RESULTS = "${env.WORKSPACE}/allure-results"
+        ALLURE_REPORT  = "${env.WORKSPACE}/allure-report"
     }
 
     stages {
+        stage('Preparar Workspace') {
+            steps {
+                echo "Limpiando workspace..."
+                deleteDir()
+            }
+        }
+
         stage('Checkout') {
             steps {
-                echo 'Clonando el repositorio...'
-                git branch: 'karaterama', url: 'https://github.com/Soysakiaytuno/jenkins-prueba-qa2.git'
+                git branch: 'main', url: 'https://github.com'
             }
         }
 
-        stage('Build & Test') {
+        stage('Instalar dependencias') {
             steps {
-                echo 'Ejecutando pruebas Karate...'
-                dir('myproject') {
-                    script {
-                        // -Dtest=ExamplesTest ejecuta solo el runner paralelo (evita duplicar pruebas)
-                        // Si quieres ejecutar runners individuales, puedes dejar solo 'mvn clean test'
-                        def mvnCmd = isUnix() ? 'mvn clean test -Dtest=ExamplesTest' : 'bat "mvn clean test -Dtest=ExamplesTest"'
-                        if (isUnix()) {
-                            sh 'mvn clean test -Dtest=ExamplesTest'
-                        } else {
-                            bat 'mvn clean test -Dtest=ExamplesTest'
-                        }
-                    }
-                }
+                bat 'npm install'
+            }
+        }
+
+        stage('Ejecutar WDIO') {
+            steps {
+                echo "Ejecutando pruebas WDIO..."
+                bat "npx wdio run wdio.conf.js"
+            }
+        }
+
+        stage('Generar reporte Allure') {
+            steps {
+                echo "Generando reporte Allure..."
+                bat """
+                npx allure generate %ALLURE_RESULTS% --clean -o %ALLURE_REPORT%
+                """
+            }
+        }
+
+        stage('Publicar reporte Allure en Jenkins') {
+            steps {
+                echo "Publicando reporte Allure usando el plugin..."
+                allure([
+                    includeProperties: false,
+                    jdk: '',
+                    results: [[path: '**/allure-results/*.json']], // <-- patrón agregado
+                    reportBuildPolicy: 'ALWAYS'
+                ])
             }
         }
     }
 
-        post {
+    post {
         always {
-            echo 'Publicando reporte HTML de Karate...'
-
-            // Publica el reporte HTML con pestaña directa en Jenkins
-            publishHTML([
-                allowMissing: true,
-                alwaysLinkToLastBuild: true,
-                keepAll: true,
-                reportDir: 'myproject/target/karate-reports',
-                reportFiles: 'karate-summary.html',
-                reportName: 'Reporte de Pruebas Karate'
-            ])
-
-            // Gráficos de tendencias JUnit nativos
-            junit allowEmptyResults: true, testResults: 'myproject/target/karate-reports/*.xml'
-
-            echo 'Limpiando workspace...'
-            cleanWs()
-        }
-        success {
-            echo '¡Todas las pruebas de Karate pasaron exitosamente!'
-        }
-        failure {
-            echo 'Falló alguna etapa o prueba del pipeline.'
+            echo 'Pipeline finalizada'
         }
     }
+}
+
+
 }
