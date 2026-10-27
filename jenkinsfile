@@ -2,12 +2,11 @@ pipeline {
     agent any
 
     tools {
-        maven 'Maven' // Nombre del Maven configurado en Jenkins
-        jdk 'Java'   // Nombre del JDK configurado en Jenkins
+        maven 'Maven'
+        jdk 'Java'
     }
 
     stages {
-
         stage('Checkout') {
             steps {
                 echo 'Clonando el repositorio...'
@@ -18,51 +17,40 @@ pipeline {
         stage('Build & Test') {
             steps {
                 echo 'Ejecutando pruebas Karate...'
-                // El pom.xml se encuentra dentro de 'myproject', por lo que debemos ingresar a ese directorio
                 dir('myproject') {
                     script {
+                        // -Dtest=ExamplesTest ejecuta solo el runner paralelo (evita duplicar pruebas)
+                        // Si quieres ejecutar runners individuales, puedes dejar solo 'mvn clean test'
+                        def mvnCmd = isUnix() ? 'mvn clean test -Dtest=ExamplesTest' : 'bat "mvn clean test -Dtest=ExamplesTest"'
                         if (isUnix()) {
-                            sh 'mvn clean test'
+                            sh 'mvn clean test -Dtest=ExamplesTest'
                         } else {
-                            bat 'mvn clean test'
+                            bat 'mvn clean test -Dtest=ExamplesTest'
                         }
                     }
                 }
-            }
-        }
-
-        stage('Publicar Reporte') {
-            steps {
-                echo 'Publicando reporte HTML de Karate...'
-                // Se publica en el bloque post/always para que el reporte esté disponible
-                // incluso si alguna prueba falló (lo cual causaría que un stage normal se salte)
-                publishHTML([
-                    allowMissing: true,
-                    alwaysLinkToLastBuild: true,
-                    keepAll: true,
-                    reportDir: 'myproject/target/karate-reports',
-                    reportFiles: 'karate-summary.html',
-                    reportName: 'Reporte de Pruebas Karate'
-                ])
-
-                // Publicación opcional de métricas JUnit para gráficos nativos en Jenkins
-                junit allowEmptyResults: true, testResults: 'myproject/target/surefire-reports/*.xml, myproject/target/karate-reports/*.xml'
-
-                echo 'Limpiando workspace...'
             }
         }
     }
 
     post {
         always {
-            echo 'Pipeline finalizado — limpiando workspace.'
+            echo 'Archivando reportes de pruebas...'
+
+            // 1. Guarda los reportes HTML como artefactos descargables (no requiere plugins adicionales)
+            archiveArtifacts artifacts: 'myproject/target/karate-reports/**', allowEmptyArchive: true
+
+            // 2. Publica resultados JUnit para ver gráficos nativos en Jenkins
+            junit allowEmptyResults: true, testResults: 'myproject/target/karate-reports/*.xml, myproject/target/surefire-reports/*.xml'
+
+            echo 'Limpiando workspace...'
             cleanWs()
         }
         success {
-            echo 'Pruebas Karate ejecutadas con éxito.'
+            echo '¡Todas las pruebas de Karate pasaron exitosamente!'
         }
         failure {
-            echo 'Falló alguna etapa del pipeline.'
+            echo 'Falló alguna etapa o prueba del pipeline.'
         }
     }
 }
