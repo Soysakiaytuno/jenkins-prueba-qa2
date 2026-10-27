@@ -2,66 +2,80 @@ pipeline {
     agent any
 
     environment {
-        // Carpeta absoluta para resultados y reportes
-        ALLURE_RESULTS = "${env.WORKSPACE}/allure-results"
-        ALLURE_REPORT  = "${env.WORKSPACE}/allure-report"
+        // Habilita el modo headless en CI y Jenkins
+        CI = 'true'
+        HEADLESS = 'true'
     }
 
     stages {
-        stage('Preparar Workspace') {
-            steps {
-                echo "Limpiando workspace..."
-                deleteDir()
-            }
-        }
-
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com'
+                echo 'Clonando el repositorio en la rama wdioprueba...'
+                git branch: 'wdioprueba', url: 'https://github.com/Soysakiaytuno/jenkins-prueba-qa2.git'
             }
         }
 
-        stage('Instalar dependencias') {
+        stage('Instalar Dependencias') {
             steps {
-                bat 'npm install'
+                echo 'Instalando dependencias de Node.js...'
+                script {
+                    if (isUnix()) {
+                        sh 'npm install'
+                    } else {
+                        bat 'npm install'
+                    }
+                }
             }
         }
 
-        stage('Ejecutar WDIO') {
+        stage('Ejecutar Pruebas WDIO') {
             steps {
-                echo "Ejecutando pruebas WDIO..."
-                bat "npx wdio run wdio.conf.js"
-            }
-        }
-
-        stage('Generar reporte Allure') {
-            steps {
-                echo "Generando reporte Allure..."
-                bat """
-                npx allure generate %ALLURE_RESULTS% --clean -o %ALLURE_REPORT%
-                """
-            }
-        }
-
-        stage('Publicar reporte Allure en Jenkins') {
-            steps {
-                echo "Publicando reporte Allure usando el plugin..."
-                allure([
-                    includeProperties: false,
-                    jdk: '',
-                    results: [[path: '**/allure-results/*.json']], // <-- patrón agregado
-                    reportBuildPolicy: 'ALWAYS'
-                ])
+                echo 'Ejecutando pruebas WebdriverIO (Cucumber)...'
+                script {
+                    if (isUnix()) {
+                        sh 'npx wdio run wdio.conf.js'
+                    } else {
+                        bat 'npx wdio run wdio.conf.js'
+                    }
+                }
             }
         }
     }
 
     post {
         always {
-            echo 'Pipeline finalizada'
+            echo 'Generando reporte Allure...'
+            script {
+                // Se genera en 'always' para que el reporte esté disponible incluso si una prueba falla
+                if (isUnix()) {
+                    sh 'npx allure generate allure-results --clean -o allure-report'
+                } else {
+                    bat 'npx allure generate allure-results --clean -o allure-report'
+                }
+            }
+
+            echo 'Archivando reporte Allure y capturas de pantalla...'
+            // 1. Archiva el reporte HTML completo y los resultados (funciona de forma nativa en Jenkins)
+            archiveArtifacts artifacts: 'allure-report/**, allure-results/**', allowEmptyArchive: true
+
+            // 2. Si tienes el plugin HTML Publisher instalado en Jenkins, puedes descomentar:
+            publishHTML([
+                allowMissing: true,
+                alwaysLinkToLastBuild: true,
+                keepAll: true,
+                reportDir: 'allure-report',
+                reportFiles: 'index.html',
+                reportName: 'Reporte Allure'
+            ])
+
+            echo 'Limpiando workspace...'
+            cleanWs()
+        }
+        success {
+            echo '¡Todas las pruebas de WebdriverIO pasaron exitosamente!'
+        }
+        failure {
+            echo 'Falló alguna prueba o etapa del pipeline.'
         }
     }
-}
-
-
 }

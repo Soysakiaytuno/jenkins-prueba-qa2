@@ -51,18 +51,38 @@ exports.config = {
     //
     capabilities: [{
         browserName: 'chrome',
-        browserName: 'chrome',
         'goog:chromeOptions': {
             args: [
                 '--disable-infobars',   // Quitar "Chrome está siendo controlado..."
                 '--disable-extensions', // Deshabilitar extensiones
-                '--start-maximized' ,    // Maximizar ventana
+                '--start-maximized',    // Maximizar ventana
                 'enable-automation',
-                '--disable-blink-features=AutomationControlled'
+                '--disable-blink-features=AutomationControlled',
+                ...(process.env.CI || process.env.HEADLESS === 'true' ? [
+                    '--headless=new',
+                    '--disable-gpu',
+                    '--no-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--window-size=1920,1080'
+                ] : [])
             ]
         },
     },
-    { browserName: 'edge' }
+    {
+        browserName: 'edge',
+        'ms:edgeOptions': {
+            args: [
+                '--start-maximized',
+                ...(process.env.CI || process.env.HEADLESS === 'true' ? [
+                    '--headless=new',
+                    '--disable-gpu',
+                    '--no-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--window-size=1920,1080'
+                ] : [])
+            ]
+        }
+    }
     ],
 
     //
