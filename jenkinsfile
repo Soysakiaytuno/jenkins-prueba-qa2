@@ -11,7 +11,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 echo 'Clonando el repositorio...'
-                git branch: 'karaterama', url: ''
+                git branch: 'karaterama', url: 'https://github.com/Soysakiaytuno/jenkins-prueba-qa2.git'
             }
         }
 
