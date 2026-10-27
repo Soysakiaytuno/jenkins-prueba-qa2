@@ -33,15 +33,22 @@ pipeline {
         }
     }
 
-    post {
+        post {
         always {
-            echo 'Archivando reportes de pruebas...'
+            echo 'Publicando reporte HTML de Karate...'
 
-            // 1. Guarda los reportes HTML como artefactos descargables (no requiere plugins adicionales)
-            archiveArtifacts artifacts: 'myproject/target/karate-reports/**', allowEmptyArchive: true
+            // Publica el reporte HTML con pestaña directa en Jenkins
+            publishHTML([
+                allowMissing: true,
+                alwaysLinkToLastBuild: true,
+                keepAll: true,
+                reportDir: 'myproject/target/karate-reports',
+                reportFiles: 'karate-summary.html',
+                reportName: 'Reporte de Pruebas Karate'
+            ])
 
-            // 2. Publica resultados JUnit para ver gráficos nativos en Jenkins
-            junit allowEmptyResults: true, testResults: 'myproject/target/karate-reports/*.xml, myproject/target/surefire-reports/*.xml'
+            // Gráficos de tendencias JUnit nativos
+            junit allowEmptyResults: true, testResults: 'myproject/target/karate-reports/*.xml'
 
             echo 'Limpiando workspace...'
             cleanWs()
