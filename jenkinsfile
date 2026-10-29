@@ -2,22 +2,28 @@ pipeline {
     agent any
 
     environment {
-        // Habilita el modo headless en CI y Jenkins
         CI = 'true'
-        HEADLESS = 'true'
+        // Rutas de Java, Android SDK, AVD y Appium para el servicio de Jenkins en Windows
+        JAVA_HOME = 'C:\\Program Files\\Eclipse Adoptium\\jdk-22.0.2.9-hotspot'
+        ANDROID_HOME = 'C:\\Users\\Mijael Ander\\AppData\\Local\\Android\\Sdk'
+        ANDROID_SDK_ROOT = 'C:\\Users\\Mijael Ander\\AppData\\Local\\Android\\Sdk'
+        ANDROID_USER_HOME = 'C:\\Users\\Mijael Ander\\.android'
+        ANDROID_AVD_HOME = 'C:\\Users\\Mijael Ander\\.android\\avd'
+        APPIUM_HOME = 'C:\\Users\\Mijael Ander\\.appium'
+        PATH = "${ANDROID_HOME}\\platform-tools;${ANDROID_HOME}\\emulator;${ANDROID_HOME}\\tools\\bin;${JAVA_HOME}\\bin;C:\\Program Files\\nodejs;C:\\Users\\Mijael Ander\\AppData\\Roaming\\npm;${env.PATH}"
     }
 
     stages {
         stage('Checkout') {
             steps {
-                echo 'Clonando el repositorio en la rama wdioprueba...'
-                git branch: 'wdioprueba', url: 'https://github.com/Soysakiaytuno/jenkins-prueba-qa2.git'
+                echo 'Clonando el repositorio en la rama movil...'
+                git branch: 'movil', url: 'https://github.com/Soysakiaytuno/jenkins-prueba-qa2.git'
             }
         }
 
         stage('Instalar Dependencias') {
             steps {
-                echo 'Instalando dependencias de Node.js...'
+                echo 'Instalando dependencias de Node.js (WebdriverIO, Appium, Cucumber, Allure)...'
                 script {
                     if (isUnix()) {
                         sh 'npm install'
@@ -28,14 +34,44 @@ pipeline {
             }
         }
 
-        stage('Ejecutar Pruebas WDIO') {
+        stage('Verificar Emulador Android') {
             steps {
-                echo 'Ejecutando pruebas WebdriverIO (Cucumber)...'
+                echo 'Verificando conexión con el emulador Android mediante ADB...'
                 script {
                     if (isUnix()) {
-                        sh 'npx wdio run wdio.conf.js'
+                        sh '''
+                            adb start-server
+                            adb devices
+                            adb wait-for-device
+                            adb shell input keyevent 82
+                        '''
                     } else {
-                        bat 'npx wdio run wdio.conf.js'
+                        bat '''
+                            adb start-server
+                            adb devices
+                            echo Esperando a que el emulador este conectado y listo...
+                            adb wait-for-device
+                            adb shell input keyevent 82
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Ejecutar Pruebas Móviles WDIO') {
+            steps {
+                echo 'Limpiando resultados previos y ejecutando pruebas móviles con Appium + WebdriverIO...'
+                script {
+                    if (isUnix()) {
+                        sh '''
+                            npm run clean:allure
+                            npx wdio run wdio.conf.js
+                        '''
+                    } else {
+                        bat '''
+                            npm run clean:allure
+                            npx wdio run wdio.conf.js
+                        '''
                     }
                 }
             }
@@ -58,24 +94,24 @@ pipeline {
             // 1. Archiva el reporte HTML completo y los resultados (funciona de forma nativa en Jenkins)
             archiveArtifacts artifacts: 'allure-report/**, allure-results/**', allowEmptyArchive: true
 
-            // 2. Si tienes el plugin HTML Publisher instalado en Jenkins, puedes descomentar:
+            // 2. Publica el reporte si tienes el plugin HTML Publisher instalado en Jenkins
             publishHTML([
                 allowMissing: true,
                 alwaysLinkToLastBuild: true,
                 keepAll: true,
                 reportDir: 'allure-report',
                 reportFiles: 'index.html',
-                reportName: 'Reporte Allure'
+                reportName: 'Reporte Allure Móvil'
             ])
 
             echo 'Limpiando workspace...'
             cleanWs()
         }
         success {
-            echo '¡Todas las pruebas de WebdriverIO pasaron exitosamente!'
+            echo '¡Todas las pruebas móviles de WebdriverIO + Appium pasaron exitosamente!'
         }
         failure {
-            echo 'Falló alguna prueba o etapa del pipeline.'
+            echo 'Falló alguna prueba móvil o etapa del pipeline.'
         }
     }
 }
